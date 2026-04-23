@@ -1,9 +1,10 @@
 import streamlit as st
 import google.generativeai as genai
 import time
+from PIL import Image
 
 # --- 1. PRO UI SETTINGS (JARVIS STYLE) ---
-st.set_page_config(page_title="JARVIS Terminal", layout="wide")
+st.set_page_config(page_title="JARVIS Terminal", layout="wide", page_icon="🤖")
 
 # Custom CSS for the "Iron Man" look
 st.markdown("""
@@ -32,15 +33,20 @@ st.markdown("""
         background-color: #06121e;
         margin-right: 20%;
     }
-    .stTextInput input {
-        background-color: #0a192f;
-        color: #00d4ff;
-        border: 1px solid #00d4ff;
+    .stTextInput input, .stChatInput input {
+        background-color: #0a192f !important;
+        color: #00d4ff !important;
+        border: 1px solid #00d4ff !important;
     }
     h1 {
         text-shadow: 0 0 20px #00d4ff;
         text-align: center;
         letter-spacing: 5px;
+    }
+    /* Sidebar Styling */
+    [data-testid="stSidebar"] {
+        background-color: #050a0f;
+        border-right: 1px solid #00d4ff;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -62,16 +68,28 @@ def check_password():
     return True
 
 if check_password():
+    # --- SIDEBAR CONTROLS ---
+    with st.sidebar:
+        st.title("🛰️ SENSORS")
+        # VISION: Image Upload
+        uploaded_file = st.file_uploader("UPLOAD VISUAL DATA", type=['png', 'jpg', 'jpeg'])
+        
+        # VOICE: Audio Input (2026 Native Feature)
+        audio_data = st.audio_input("VOICE COMMAND")
+        
+        st.markdown("---")
+        if st.button("CLEAR ARCHIVE"):
+            st.session_state.messages = []
+            st.rerun()
+
     st.markdown("<h1>JARVIS PROTOCOL ACTIVE</h1>", unsafe_allow_html=True)
 
     # --- 3. CONFIGURE GEMINI ---
-    # Pulling safely from Streamlit Secrets
     genai.configure(api_key=st.secrets["GEMINI_KEY"])
     
-    # Using the most stable model name to avoid 404
     model = genai.GenerativeModel(
         model_name='gemini-2.5-flash',
-        system_instruction="You are JARVIS, the highly intelligent AI assistant from Iron Man. Be polite, concise, and professional. Address the user as 'Sir'. Use tech terms occasionally."
+        system_instruction="You are JARVIS, the highly intelligent AI assistant from Iron Man. Be polite, concise, and professional. Address the user as 'Sir'. Use tech terms like 'Scanning', 'Analyzing', 'Protocols' frequently."
     )
 
     if "messages" not in st.session_state:
@@ -82,25 +100,45 @@ if check_password():
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
-    # Chat Input
-    if prompt := st.chat_input("awaiting orders..."):
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"):
-            st.markdown(prompt)
+    # Chat Input Handling
+    prompt = st.chat_input("awaiting orders...")
+    
+    # Trigger if there is a Text prompt, an Image, or Audio
+    if prompt or uploaded_file or audio_data:
+        # Use audio as prompt if text is empty
+        input_data = []
+        display_text = prompt if prompt else "Analyzing sensory input..."
+        
+        if prompt:
+            input_data.append(prompt)
+        
+        if uploaded_file:
+            img = Image.open(uploaded_file)
+            input_data.append(img)
+            st.sidebar.image(img, caption="Visual Data Received")
 
+        if audio_data:
+            # Note: In 2026, Gemini 2.5 processes st.audio_input directly
+            input_data.append(audio_data)
+
+        # Display User message
+        st.session_state.messages.append({"role": "user", "content": display_text})
+        with st.chat_message("user"):
+            st.markdown(display_text)
+
+        # Generate JARVIS Response
         with st.chat_message("assistant"):
             message_placeholder = st.empty()
             full_response = ""
             
             try:
-                with st.spinner("Analyzing data..."):
-                    # Using the newer generation method
-                    response = model.generate_content(prompt)
+                with st.spinner("Processing sensory streams..."):
+                    response = model.generate_content(input_data)
                 
                 # Typing effect animation
                 for chunk in response.text.split():
                     full_response += chunk + " "
-                    time.sleep(0.05)
+                    time.sleep(0.04)
                     message_placeholder.markdown(full_response + "▌")
                 
                 message_placeholder.markdown(full_response)
