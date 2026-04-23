@@ -10,7 +10,6 @@ st.set_page_config(page_title="JARVIS Hub", layout="wide", page_icon="🤖")
 # Custom CSS for the "ChatGPT-style but Iron Man" look
 st.markdown("""
     <style>
-    /* Main Background */
     .stApp {
         background-color: #050a0f;
         color: #00d4ff;
@@ -23,26 +22,28 @@ st.markdown("""
         border-right: 1px solid #00d4ff33;
     }
     
-    /* Input Area Container */
-    .stChatInputContainer {
-        padding-bottom: 20px;
-    }
-
-    /* Message Styling */
+    /* Clean Message Bubbles */
     [data-testid="stChatMessage"] {
-        border-radius: 10px;
+        border-radius: 15px;
         border: 1px solid #00d4ff22;
         margin-bottom: 15px;
+        background-color: #0a192f66;
     }
-    
-    /* Custom Sidebar Buttons */
+
+    /* Floating Input Bar Styling */
+    .stChatInputContainer {
+        border-top: 1px solid #00d4ff33;
+        padding-top: 20px;
+    }
+
+    /* Iron Man Glow Buttons */
     .stButton>button {
         width: 100%;
         background-color: #0a192f;
         color: #00d4ff;
         border: 1px solid #00d4ff;
-        border-radius: 5px;
-        transition: 0.3s;
+        border-radius: 8px;
+        font-weight: bold;
     }
     .stButton>button:hover {
         box-shadow: 0 0 15px #00d4ff;
@@ -53,12 +54,12 @@ st.markdown("""
     h1 {
         text-shadow: 0 0 15px #00d4ff;
         font-weight: 200;
-        letter-spacing: 3px;
+        text-align: center;
     }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. SESSION STATE INITIALIZATION ---
+# --- 2. SESSION STATE ---
 if "messages" not in st.session_state:
     st.session_state.messages = []
 if "temp_storage" not in st.session_state:
@@ -80,7 +81,7 @@ def check_password():
     return True
 
 if check_password():
-    # --- SIDEBAR: CHAT HISTORY & STORAGE ---
+    # --- SIDEBAR: HISTORY & STORAGE ---
     with st.sidebar:
         st.markdown("### 🕒 CHAT ARCHIVE")
         if st.button("+ NEW SESSION"):
@@ -89,86 +90,91 @@ if check_password():
             st.rerun()
         
         st.markdown("---")
-        # Display snippets of chat history
-        for idx, msg in enumerate(st.session_state.messages[-5:]):
+        # Show recent history
+        for msg in st.session_state.messages[-6:]:
             if msg["role"] == "user":
-                st.caption(f"Q: {msg['content'][:30]}...")
+                st.caption(f"💬 {msg['content'][:35]}...")
 
         st.markdown("---")
-        # STORAGE BUTTON
-        with st.expander("📦 STORAGE (Temp Data)"):
+        # STORAGE VAULT
+        with st.expander("📂 STORAGE (Vault)"):
             if not st.session_state.temp_storage:
                 st.write("Vault empty.")
             for item in st.session_state.temp_storage:
-                st.caption(f"✅ {item['name']}")
+                st.caption(f"✔️ {item['name']} ({item['type']})")
             if st.button("Purge Vault"):
                 st.session_state.temp_storage = []
                 st.rerun()
 
-    # --- MAIN UI ---
     st.markdown("<h1>JARVIS INTELLIGENCE HUB</h1>", unsafe_allow_html=True)
 
     # Display Conversation
-    chat_container = st.container()
-    with chat_container:
-        for message in st.session_state.messages:
-            with st.chat_message(message["role"]):
-                st.markdown(message["content"])
+    for message in st.session_state.messages:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
 
-    # --- THE "CHATGPT" INPUT CONSOLE ---
-    st.markdown("---")
-    
-    # Sensory Input Row (Right above text box)
-    input_cols = st.columns([2, 2, 2, 4])
-    
-    with input_cols[0]:
-        uploaded_files = st.file_uploader("📎 FILES", accept_multiple_files=True, label_visibility="collapsed")
-    with input_cols[1]:
-        cam_image = st.camera_input("📸 SCAN", label_visibility="collapsed")
-    with input_cols[2]:
-        audio_cmd = st.audio_input("🎤 VOICE", label_visibility="collapsed")
+    # --- 4. INTEGRATED CHATGPT-STYLE INPUT ---
+    # We use a container to group the icons and the input bar
+    with st.container():
+        st.markdown("---")
+        # Icon row for attachments
+        col1, col2, col3, col4 = st.columns([1,1,1,1])
+        with col1:
+            uploaded_files = st.file_uploader("📎", accept_multiple_files=True, label_visibility="collapsed")
+        with col2:
+            cam_image = st.camera_input("📸", label_visibility="collapsed")
+        with col3:
+            audio_cmd = st.audio_input("🎤", label_visibility="collapsed")
+        with col4:
+            st.caption("Sensors Active")
 
-    # The Main Text Input
-    prompt = st.chat_input("Direct JARVIS...")
+        # The Text Area (Main Command)
+        prompt = st.chat_input("Direct JARVIS...")
 
-    # --- 4. DATA PROCESSING ---
+    # --- 5. MULTIMODAL LOGIC & ERROR FIX ---
     if prompt or uploaded_files or cam_image or audio_cmd:
         genai.configure(api_key=st.secrets["GEMINI_KEY"])
         model = genai.GenerativeModel(
             model_name='gemini-2.5-flash',
-            system_instruction="You are JARVIS. Use a ChatGPT-style helpfulness with a high-tech Iron Man personality. Address the user as Sir."
+            system_instruction="You are JARVIS. Professional, helpful, and high-tech. Address the user as Sir."
         )
 
-        # Prepare the payload
         payload = []
         
+        # 1. Add Text
         if prompt:
             payload.append(prompt)
-        
-        # Process multiple files (PDF, Images, etc.)
+        else:
+            payload.append("Analyzing provided sensory data, Sir.")
+
+        # 2. Add Files/Images (Fixed processing)
         if uploaded_files:
             for f in uploaded_files:
                 st.session_state.temp_storage.append({"name": f.name, "type": f.type})
                 if f.type.startswith("image/"):
                     payload.append(Image.open(f))
                 else:
-                    # For PDFs/Docs, Gemini reads bytes
+                    # PDF and other docs
                     payload.append({"mime_type": f.type, "data": f.getvalue()})
 
+        # 3. Add Camera
         if cam_image:
             img = Image.open(cam_image)
             payload.append(img)
-            st.session_state.temp_storage.append({"name": "Camera_Capture.png", "type": "image/png"})
+            st.session_state.temp_storage.append({"name": "Live_Scan.png", "type": "image/png"})
 
+        # 4. Add Audio (FIXED: Converting UploadedFile to Gemini Blob)
         if audio_cmd:
-            payload.append(audio_cmd)
-            st.session_state.temp_storage.append({"name": "Voice_Note.wav", "type": "audio/wav"})
+            audio_blob = {
+                "mime_type": "audio/wav",
+                "data": audio_cmd.getvalue()
+            }
+            payload.append(audio_blob)
+            st.session_state.temp_storage.append({"name": "Voice_Command.wav", "type": "audio/wav"})
 
-        # Update History
-        user_text = prompt if prompt else "Analyzing sensory data..."
-        st.session_state.messages.append({"role": "user", "content": user_text})
+        # Update History & Respond
+        st.session_state.messages.append({"role": "user", "content": prompt if prompt else "Sensory Input Sent."})
         
-        # Trigger JARVIS
         with st.chat_message("assistant"):
             resp_placeholder = st.empty()
             full_resp = ""
@@ -176,18 +182,18 @@ if check_password():
             try:
                 response = model.generate_content(payload)
                 
-                # Typing effect + Acoustic response
+                # Typing Animation
                 for chunk in response.text.split():
                     full_resp += chunk + " "
                     time.sleep(0.04)
                     resp_placeholder.markdown(full_resp + "▌")
                 
-                # Native Voice Output (Optional: only if you want it to speak every time)
-                st.text_to_speech(response.text)
-                
+                # Final clean text + Voice Output
                 resp_placeholder.markdown(full_resp)
+                st.text_to_speech(full_resp)
+                
                 st.session_state.messages.append({"role": "assistant", "content": full_resp})
-                st.rerun() # Refresh to update sidebar history
+                st.rerun()
                 
             except Exception as e:
                 st.error(f"Hardware Error: {str(e)}")
