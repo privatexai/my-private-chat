@@ -53,7 +53,7 @@ def check_password():
     if not st.session_state.authenticated:
         st.title("SYSTEM LOCKED")
         password = st.text_input("ENTER ACCESS CODE", type="password")
-        if password == "1234":
+        if password == "TVO_1T":
             st.session_state.authenticated = True
             st.rerun()
         return False
@@ -64,7 +64,7 @@ if check_password():
 
     # --- 3. CONFIGURE GEMINI ---
     # Replace with your actual API Key
-    genai.configure(api_key="YOUR_GEMINI_API_KEY_HERE")
+    genai.configure(api_key="AIzaSyDNIuMYxSegF3pRrZBnQIqmWND4w-uX5vk")
     
     # SYSTEM INSTRUCTION: Tells Gemini how to behave
     model = genai.GenerativeModel(
