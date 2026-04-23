@@ -1,33 +1,32 @@
 import streamlit as st
 import sqlite3
 import time
+import tempfile
 from datetime import datetime
 from google import genai
 from google.genai import types
 
-# --- 1. SYSTEM ARCHITECTURE ---
-st.set_page_config(page_title="JARVIS v13.0", page_icon="🛡️", layout="wide")
+# --- 1. CORE SYSTEM ARCHITECTURE ---
+st.set_page_config(page_title="JARVIS v13.1", page_icon="🛡️", layout="wide")
 
-# Iron Man Terminal Styling
 st.markdown("""
     <style>
     .stApp { background-color: #050a0f; color: #00d4ff; font-family: 'Courier New', Courier, monospace; }
     .stChatMessage { border-radius: 10px; border: 1px solid #00d4ff; margin-bottom: 10px; background-color: #0a192f; }
-    .stButton>button { background-color: #00d4ff; color: black; border-radius: 5px; width: 100%; }
-    .stTextInput>div>div>input { background-color: #0a192f; color: #00d4ff; border: 1px solid #00d4ff; }
+    .stButton>button { background-color: #00d4ff; color: black; font-weight: bold; }
     </style>
 """, unsafe_allow_html=True)
 
-# --- 2. AUTHENTICATION & CORE INITIALIZATION ---
+# --- 2. AUTHENTICATION & CLIENT ---
 try:
-    API_KEY = st.secrets["GEMINI_KEY"]
+    # This pulls directly from your Streamlit Secrets
+    client = genai.Client(api_key=st.secrets["GEMINI_KEY"])
     MASTER_PASSCODE = st.secrets["ACCESS_CODE"]
-    client = genai.Client(api_key=API_KEY)
 except Exception as e:
-    st.error(f"CRITICAL: Hardware Authentication Failed. {e}")
+    st.error(f"SYSTEM FAILURE: Missing Secret Credentials. {e}")
     st.stop()
 
-# --- 3. DATABASE ARCHIVE ---
+# --- 3. DATABASE PROTOCOLS ---
 def init_db():
     conn = sqlite3.connect('jarvis_v13.db', check_same_thread=False)
     c = conn.cursor()
@@ -51,13 +50,13 @@ if not st.session_state.unlocked:
                 st.session_state.unlocked = True
                 st.rerun()
             else:
-                st.error("ACCESS DENIED: Protocol 11-A Triggered.")
+                st.error("ACCESS DENIED.")
     st.stop()
 
-# --- 5. INTERFACE TABS ---
+# --- 5. MULTIMODAL INTERFACE ---
 tab_chat, tab_veo = st.tabs(["🧠 Intelligence Core", "🎥 Cinematic Lab"])
 
-# --- 6. INTELLIGENCE CORE (Text, Math, Search) ---
+# --- TAB 1: CHAT & LOGIC ---
 with tab_chat:
     if "messages" not in st.session_state:
         st.session_state.messages = []
@@ -77,18 +76,18 @@ with tab_chat:
         
         with st.chat_message("assistant"):
             try:
-                # 2026 Multimodal Intelligence Config
+                # 2026 Intelligence Config
                 config = types.GenerateContentConfig(
-                    system_instruction="You are JARVIS. Use Search for news and Code for math. Address user as Sir.",
+                    system_instruction="You are JARVIS. Address the user as Sir. Use Code for math/logic.",
                     tools=[
                         types.Tool(google_search=types.GoogleSearch()),
                         types.Tool(code_execution=types.ToolCodeExecution())
                     ],
-                    temperature=0.2
+                    temperature=0.1
                 )
 
                 with st.spinner("Analyzing data streams..."):
-                    # Using gemini-2.0-flash to bypass the -lite quota exhaustion
+                    # Using the standard Flash core for higher quota/stability
                     response = client.models.generate_content(
                         model='gemini-2.0-flash', 
                         contents=prompt,
@@ -106,33 +105,37 @@ with tab_chat:
             except Exception as e:
                 st.error(f"Logic Breach: {e}")
 
-# --- 7. CINEMATIC LAB (Veo 3.1) ---
+# --- TAB 2: VEO 3.1 CINEMATICS ---
 with tab_veo:
-    st.subheader("Veo 3.1 Visual Generation")
-    video_prompt = st.text_area("Describe the cinematic visual, Sir (e.g., 'A futuristic London skyline with flying cars at sunset')")
+    st.subheader("Veo 3.1 High-Fidelity Render Engine")
+    video_prompt = st.text_area("Describe the cinematic scene...")
     
-    if st.button("Engage Render Engine"):
+    if st.button("Engage Render"):
         if video_prompt:
             try:
-                with st.spinner("JARVIS is rendering the visual sequence (approx 90s)..."):
+                with st.spinner("Rendering cinematic sequence (approx 90s)..."):
+                    # Initiate Veo 3.1
                     operation = client.models.generate_videos(
-                        model="veo-2", # Updated for the 2026 Veo-series name
+                        model="veo-3.1-generate-preview",
                         prompt=video_prompt,
-                        config=types.GenerateVideosConfig(
-                            aspect_ratio="16:9",
-                            video_format="mp4"
-                        )
+                        config=types.GenerateVideosConfig(aspect_ratio="16:9")
                     )
                     
-                    # Polling for completion
+                    # Polling Protocol
                     while not operation.done:
                         time.sleep(10)
                         operation = client.operations.get(operation.name)
                     
-                    video_url = operation.result.generated_videos[0].video.path
-                    st.video(video_url)
+                    # Process and Display
+                    generated_video = operation.response.generated_videos[0]
+                    
+                    # Streamlit-friendly video display
+                    with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp_file:
+                        client.files.download(file=generated_video.video, path=tmp_file.name)
+                        st.video(tmp_file.name)
+                        
                     st.success("Visual stream stabilized, Sir.")
             except Exception as e:
                 st.error(f"Render Failure: {e}")
         else:
-            st.warning("Please provide a prompt for the rendering engine, Sir.")
+            st.warning("Render prompt required, Sir.")
