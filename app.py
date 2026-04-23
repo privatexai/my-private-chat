@@ -86,7 +86,7 @@ if prompt:
     with st.chat_message("assistant"):
         try:
             genai.configure(api_key=GEMINI_API_KEY)
-            model = genai.GenerativeModel('gemini-1.5-flash')
+            model = genai.GenerativeModel('gemini-2.5-flash')
             
             with st.spinner("Analyzing data streams..."):
                 response = model.generate_content(prompt)
