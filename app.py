@@ -70,7 +70,7 @@ if check_password():
     
     # Using the most stable model name to avoid 404
     model = genai.GenerativeModel(
-        model_name='gemini-1.5-flash',
+        model_name='gemini-2.5-flash',
         system_instruction="You are JARVIS, the highly intelligent AI assistant from Iron Man. Be polite, concise, and professional. Address the user as 'Sir'. Use tech terms occasionally."
     )
 
