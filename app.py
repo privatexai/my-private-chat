@@ -22,7 +22,7 @@ try:
     
     # Initializing the 1.5 Flash model (High Stability)
     model = genai.GenerativeModel(
-        model_name="gemini-1.5-flash",
+        model_name="gemini-2.5-flash",
         system_instruction="You are JARVIS, an elite British AI. Address the user as Sir. Focus on efficiency and logic."
     )
 except Exception as e:
