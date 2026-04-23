@@ -1,20 +1,20 @@
 import streamlit as st
 import google.generativeai as genai
 import sqlite3
-import time
 from datetime import datetime
 
-# --- 1. THE GATEKEEPER ---
-# Pulls the secret 'ACCESS_CODE' from your Streamlit Vault
+# --- 1. GATEKEEPER CONFIG ---
 try:
     MASTER_PASSCODE = st.secrets["ACCESS_CODE"]
 except:
     st.error("Hardware Error: ACCESS_CODE not found in Vault.")
     st.stop()
 
+# --- 2. AUTHENTICATION STATE ---
 if "gate_unlocked" not in st.session_state:
     st.session_state.gate_unlocked = False
 
+# --- 3. THE PASSCODE GATE ---
 if not st.session_state.gate_unlocked:
     st.markdown("<h1 style='text-align:center; color:#00d4ff;'>SYSTEM ENCRYPTED</h1>", unsafe_allow_html=True)
     cols = st.columns([1,2,1])
@@ -28,43 +28,36 @@ if not st.session_state.gate_unlocked:
                 st.error("Access Denied: Invalid Passcode.")
     st.stop()
 
-# --- 2. AUTOMATIC USER SYNC (GOOGLE) ---
-# Once the gate is open, we identify the user via Google for history tracking
-if not st.user.is_logged_in:
-    st.markdown("<h1 style='text-align:center;'>IDENTIFYING OPERATOR...</h1>", unsafe_allow_html=True)
-    st.button("Sign in with Google", on_click=st.login, type="primary", use_container_width=True)
-    st.stop()
+# --- 4. SECURE USER HUB (Single User Mode) ---
+# Since we removed Google, we'll use a fixed ID for your local storage
+USER_ID = "Admin_Sir" 
 
-# --- 3. PERSISTENT DATABASE ENGINE ---
 def init_db():
     conn = sqlite3.connect('jarvis_vault.db', check_same_thread=False)
     c = conn.cursor()
-    # We only need the history table now, linked to Google Email
-    c.execute('CREATE TABLE IF NOT EXISTS history(user_email TEXT, role TEXT, content TEXT, timestamp DATETIME)')
+    c.execute('CREATE TABLE IF NOT EXISTS history(user_id TEXT, role TEXT, content TEXT, timestamp DATETIME)')
     conn.commit()
     return conn, c
 
 conn, c = init_db()
 
-# --- 4. SECURE USER INTERFACE ---
-st.title(f"JARVIS HUB: {st.user.name.upper()}")
+st.title("JARVIS SECURE TERMINAL")
 
-# Sidebar for logout and system info
+# Sidebar for logout
 with st.sidebar:
-    st.image(st.user.picture, width=100)
-    st.write(f"Operator: {st.user.email}")
-    if st.button("Secure Logout"):
+    st.markdown("### 🛡️ STATUS: SECURE")
+    if st.button("Lock Terminal"):
         st.session_state.gate_unlocked = False
-        st.logout()
+        st.rerun()
 
-# Load Chat History for THIS Google Account
+# Load History
 if "messages" not in st.session_state:
     st.session_state.messages = []
-    c.execute('SELECT role, content FROM history WHERE user_email=? ORDER BY timestamp ASC', (st.user.email,))
+    c.execute('SELECT role, content FROM history WHERE user_id=? ORDER BY timestamp ASC', (USER_ID,))
     for row in c.fetchall():
         st.session_state.messages.append({"role": row[0], "content": row[1]})
 
-# Display Conversation
+# Display Chat
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
@@ -74,23 +67,22 @@ prompt = st.chat_input("Direct JARVIS...")
 
 if prompt:
     st.session_state.messages.append({"role": "user", "content": prompt})
-    c.execute('INSERT INTO history(user_email, role, content, timestamp) VALUES (?,?,?,?)', 
-              (st.user.email, "user", prompt, datetime.now()))
+    c.execute('INSERT INTO history(user_id, role, content, timestamp) VALUES (?,?,?,?)', 
+              (USER_ID, "user", prompt, datetime.now()))
     conn.commit()
     
     with st.chat_message("assistant"):
         genai.configure(api_key=st.secrets["GEMINI_KEY"])
         model = genai.GenerativeModel('gemini-2.5-flash')
-        
         response = model.generate_content(prompt)
         
         st.markdown(response.text)
         st.session_state.messages.append({"role": "assistant", "content": response.text})
         
-        c.execute('INSERT INTO history(user_email, role, content, timestamp) VALUES (?,?,?,?)', 
-                  (st.user.email, "assistant", response.text, datetime.now()))
+        c.execute('INSERT INTO history(user_id, role, content, timestamp) VALUES (?,?,?,?)', 
+                  (USER_ID, "assistant", response.text, datetime.now()))
         conn.commit()
         
-        # Acoustic Protocol (British Voice)
+        # Audio Synthesis
         voice_url = f"https://translate.google.com/translate_tts?ie=UTF-8&q={response.text[:200].replace(' ', '%20')}&tl=en-gb&client=tw-ob"
         st.components.v1.html(f'<audio autoplay src="{voice_url}"></audio>', height=0)
