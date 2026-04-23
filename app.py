@@ -43,7 +43,7 @@ st.markdown("""
         letter-spacing: 5px;
     }
     </style>
-    """, unsafe_allow_status=True)
+    """, unsafe_allow_html=True)
 
 # --- 2. AUTHENTICATION ---
 def check_password():
