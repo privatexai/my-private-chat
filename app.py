@@ -53,9 +53,11 @@ def check_password():
     if not st.session_state.authenticated:
         st.title("SYSTEM LOCKED")
         password = st.text_input("ENTER ACCESS CODE", type="password")
-        if password == st.secrets["ACCESS_CODE"]:
+        if "ACCESS_CODE" in st.secrets and password == st.secrets["ACCESS_CODE"]:
             st.session_state.authenticated = True
             st.rerun()
+        elif password != "":
+            st.error("ACCESS DENIED")
         return False
     return True
 
@@ -63,9 +65,10 @@ if check_password():
     st.markdown("<h1>JARVIS PROTOCOL ACTIVE</h1>", unsafe_allow_html=True)
 
     # --- 3. CONFIGURE GEMINI ---
-    # Everything here is indented exactly 4 spaces
+    # Pulling safely from Streamlit Secrets
     genai.configure(api_key=st.secrets["GEMINI_KEY"])
     
+    # Using the most stable model name to avoid 404
     model = genai.GenerativeModel(
         model_name='gemini-1.5-flash',
         system_instruction="You are JARVIS, the highly intelligent AI assistant from Iron Man. Be polite, concise, and professional. Address the user as 'Sir'. Use tech terms occasionally."
@@ -81,22 +84,20 @@ if check_password():
 
     # Chat Input
     if prompt := st.chat_input("awaiting orders..."):
-        # Display User message
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.markdown(prompt)
 
-        # Generate JARVIS Response
         with st.chat_message("assistant"):
             message_placeholder = st.empty()
             full_response = ""
             
             try:
-                # Add a small "loading" animation
                 with st.spinner("Analyzing data..."):
+                    # Using the newer generation method
                     response = model.generate_content(prompt)
                 
-                # Typing effect
+                # Typing effect animation
                 for chunk in response.text.split():
                     full_response += chunk + " "
                     time.sleep(0.05)
