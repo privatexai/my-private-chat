@@ -109,21 +109,23 @@ if check_password():
 
     prompt = st.chat_input("Direct JARVIS...")
 
-    # --- 5. EXECUTION ---
+    # --- 5. EXECUTION (BRITISH PROTOCOL) ---
     if prompt or active_payload:
         genai.configure(api_key=st.secrets["GEMINI_KEY"])
         model = genai.GenerativeModel('gemini-2.5-flash')
         
-        input_list = [prompt] if prompt else ["Analyze sensory data, Sir."]
+        input_list = [prompt] if prompt else ["Sir, I am scanning the provided data now."]
         input_list.extend(active_payload)
 
-        st.session_state.messages.append({"role": "user", "content": prompt if prompt else "Sensory scan sent."})
+        st.session_state.messages.append({"role": "user", "content": prompt if prompt else "Sensory scan initiated."})
         
         with st.chat_message("assistant"):
             full_resp = ""
             resp_area = st.empty()
             try:
                 response = model.generate_content(input_list)
+                
+                # Typing effect
                 for chunk in response.text.split():
                     full_resp += chunk + " "
                     time.sleep(0.02)
@@ -131,12 +133,20 @@ if check_password():
                 
                 resp_area.markdown(full_resp)
                 
-                # Audio Fix: We use a more stable HTML/Markdown approach for audio if native fails
-                # This line allows audio response without calling the broken attribute
-                st.audio(f"https://translate.google.com/translate_tts?ie=UTF-8&q={full_resp[:200]}&tl=en&client=tw-ob")
+                # --- NEW: HIGH-QUALITY UK VOICE ---
+                # We use an encoded URL for a professional British Male voice
+                # 'tl=en-gb' forces the UK accent
+                encoded_text = full_resp.replace(" ", "%20")[:300] # Limit length for speed
+                voice_url = f"https://translate.google.com/translate_tts?ie=UTF-8&q={encoded_text}&tl=en-gb&client=tw-ob"
+                
+                st.audio(voice_url, format="audio/mp3", autoplay=True)
                 
                 st.session_state.messages.append({"role": "assistant", "content": full_resp})
+                
+                # Reset sensors for next command
                 st.session_state.sensor_mode = None
+                time.sleep(1)
                 st.rerun()
+                
             except Exception as e:
-                st.error(f"Hardware Error: {str(e)}")
+                st.error(f"Acoustic Error: {str(e)}")
