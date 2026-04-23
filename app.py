@@ -1,77 +1,96 @@
 import streamlit as st
+import google.generativeai as genai
 import sqlite3
-import hashlib
+import time
 from datetime import datetime
 
-# --- 1. GATEKEEPER CONFIG ---
-# This pulls the 'Master Pass' from your Streamlit Secrets Vault
+# --- 1. THE GATEKEEPER ---
+# Pulls the secret 'ACCESS_CODE' from your Streamlit Vault
 try:
     MASTER_PASSCODE = st.secrets["ACCESS_CODE"]
 except:
     st.error("Hardware Error: ACCESS_CODE not found in Vault.")
     st.stop()
 
-# --- 2. PERSONAL DATABASE ENGINE ---
+if "gate_unlocked" not in st.session_state:
+    st.session_state.gate_unlocked = False
+
+if not st.session_state.gate_unlocked:
+    st.markdown("<h1 style='text-align:center; color:#00d4ff;'>SYSTEM ENCRYPTED</h1>", unsafe_allow_html=True)
+    cols = st.columns([1,2,1])
+    with cols[1]:
+        gate_input = st.text_input("ENTER MASTER PASSCODE", type="password")
+        if st.button("Unlock Terminal", use_container_width=True):
+            if gate_input == MASTER_PASSCODE:
+                st.session_state.gate_unlocked = True
+                st.rerun()
+            else:
+                st.error("Access Denied: Invalid Passcode.")
+    st.stop()
+
+# --- 2. AUTOMATIC USER SYNC (GOOGLE) ---
+# Once the gate is open, we identify the user via Google for history tracking
+if not st.user.is_logged_in:
+    st.markdown("<h1 style='text-align:center;'>IDENTIFYING OPERATOR...</h1>", unsafe_allow_html=True)
+    st.button("Sign in with Google", on_click=st.login, type="primary", use_container_width=True)
+    st.stop()
+
+# --- 3. PERSISTENT DATABASE ENGINE ---
 def init_db():
     conn = sqlite3.connect('jarvis_vault.db', check_same_thread=False)
     c = conn.cursor()
-    c.execute('CREATE TABLE IF NOT EXISTS users(id TEXT PRIMARY KEY, password TEXT)')
-    c.execute('CREATE TABLE IF NOT EXISTS history(user_id TEXT, role TEXT, content TEXT, timestamp DATETIME)')
+    # We only need the history table now, linked to Google Email
+    c.execute('CREATE TABLE IF NOT EXISTS history(user_email TEXT, role TEXT, content TEXT, timestamp DATETIME)')
     conn.commit()
     return conn, c
 
 conn, c = init_db()
 
-def hash_pass(password):
-    return hashlib.sha256(str.encode(password)).hexdigest()
+# --- 4. SECURE USER INTERFACE ---
+st.title(f"JARVIS HUB: {st.user.name.upper()}")
 
-# --- 3. TIER 1: THE GLOBAL PASSCODE GATE ---
-if "gate_unlocked" not in st.session_state: st.session_state.gate_unlocked = False
+# Sidebar for logout and system info
+with st.sidebar:
+    st.image(st.user.picture, width=100)
+    st.write(f"Operator: {st.user.email}")
+    if st.button("Secure Logout"):
+        st.session_state.gate_unlocked = False
+        st.logout()
 
-if not st.session_state.gate_unlocked:
-    st.markdown("<h1 style='text-align:center;'>SYSTEM ENCRYPTED</h1>", unsafe_allow_html=True)
-    gate_input = st.text_input("ENTER MASTER PASSCODE", type="password")
-    if st.button("Unlock Terminal"):
-        if gate_input == MASTER_PASSCODE:
-            st.session_state.gate_unlocked = True
-            st.rerun()
-        else:
-            st.error("Invalid Master Passcode.")
-    st.stop()
+# Load Chat History for THIS Google Account
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+    c.execute('SELECT role, content FROM history WHERE user_email=? ORDER BY timestamp ASC', (st.user.email,))
+    for row in c.fetchall():
+        st.session_state.messages.append({"role": row[0], "content": row[1]})
 
-# --- 4. TIER 2: PERSONAL LOGIN (Email/Mobile) ---
-if "logged_in" not in st.session_state: st.session_state.logged_in = False
-if "user_id" not in st.session_state: st.session_state.user_id = None
+# Display Conversation
+for msg in st.session_state.messages:
+    with st.chat_message(msg["role"]):
+        st.markdown(msg["content"])
 
-if not st.session_state.logged_in:
-    st.markdown("<h1 style='text-align:center;'>USER IDENTIFICATION</h1>", unsafe_allow_html=True)
-    mode = st.radio("Protocol", ["Login", "Register New Profile"])
+# --- 5. ANALYTICAL CORE ---
+prompt = st.chat_input("Direct JARVIS...")
+
+if prompt:
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    c.execute('INSERT INTO history(user_email, role, content, timestamp) VALUES (?,?,?,?)', 
+              (st.user.email, "user", prompt, datetime.now()))
+    conn.commit()
     
-    u_id = st.text_input("Email or Mobile Number")
-    u_pw = st.text_input("Private Password", type="password")
-    
-    if mode == "Login":
-        if st.button("Verify Identity"):
-            c.execute('SELECT password FROM users WHERE id=?', (u_id,))
-            res = c.fetchone()
-            if res and res[0] == hash_pass(u_pw):
-                st.session_state.logged_in = True
-                st.session_state.user_id = u_id
-                st.rerun()
-            else:
-                st.error("Access Denied: Identity mismatch.")
-    else:
-        if st.button("Initialize Profile"):
-            try:
-                c.execute('INSERT INTO users(id, password) VALUES (?,?)', (u_id, hash_pass(u_pw)))
-                conn.commit()
-                st.success("Profile Created. Please switch to Login.")
-            except:
-                st.error("This ID is already registered.")
-    st.stop()
-
-# --- 5. SECURE USER HUB ---
-st.title(f"JARVIS HUB: {st.session_state.user_id}")
-
-# From here, all queries use: WHERE user_id = st.session_state.user_id
-# This keeps your storage completely separate from any other user.
+    with st.chat_message("assistant"):
+        genai.configure(api_key=st.secrets["GEMINI_KEY"])
+        model = genai.GenerativeModel('gemini-2.5-flash')
+        
+        response = model.generate_content(prompt)
+        
+        st.markdown(response.text)
+        st.session_state.messages.append({"role": "assistant", "content": response.text})
+        
+        c.execute('INSERT INTO history(user_email, role, content, timestamp) VALUES (?,?,?,?)', 
+                  (st.user.email, "assistant", response.text, datetime.now()))
+        conn.commit()
+        
+        # Acoustic Protocol (British Voice)
+        voice_url = f"https://translate.google.com/translate_tts?ie=UTF-8&q={response.text[:200].replace(' ', '%20')}&tl=en-gb&client=tw-ob"
+        st.components.v1.html(f'<audio autoplay src="{voice_url}"></audio>', height=0)
