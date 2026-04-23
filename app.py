@@ -53,7 +53,7 @@ def check_password():
     if not st.session_state.authenticated:
         st.title("SYSTEM LOCKED")
         password = st.text_input("ENTER ACCESS CODE", type="password")
-        if password == "TVO_1T":
+        if password == st.secrets["ACCESS_CODE"]:
             st.session_state.authenticated = True
             st.rerun()
         return False
@@ -64,11 +64,11 @@ if check_password():
 
     # --- 3. CONFIGURE GEMINI ---
     # Replace with your actual API Key
-    genai.configure(api_key="AIzaSyDNIuMYxSegF3pRrZBnQIqmWND4w-uX5vk")
+   genai.configure(api_key=st.secrets["GEMINI_KEY"])
     
     # SYSTEM INSTRUCTION: Tells Gemini how to behave
     model = genai.GenerativeModel(
-        model_name='gemini-2.5-flash',
+      model_name='gemini-3.1-flash-preview',
         system_instruction="You are JARVIS, the highly intelligent AI assistant from Iron Man. Be polite, concise, and professional. Address the user as 'Sir'. Use tech terms occasionally."
     )
 
