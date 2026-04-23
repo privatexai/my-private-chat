@@ -83,21 +83,28 @@ if prompt:
     
     with st.chat_message("assistant"):
         try:
-            # INTEGRATING GOOGLE SEARCH + CODE EXECUTION
+            # CORRECTED TOOL DEFINITIONS FOR APRIL 2026
             model = genai.GenerativeModel(
-                model_name='gemini-2.5-flash-lite', # Using 2.5 stable for tool reliability
+                model_name='gemini-2.5-flash-lite', 
                 tools=[
-                    {"google_search_retrieval": {}}, # LIVE SEARCH
-                    {"code_execution": {}}           # MATH & ALGORITHMS
+                    # Changed 'google_search_retrieval' to 'google_search'
+                    {"google_search": {}}, 
+                    {"code_execution": {}}
                 ],
                 system_instruction=SYSTEM_INSTRUCTION
             )
             
-            with st.spinner("Processing through analytical layers..."):
-                response = model.generate_content(prompt)
+            with st.spinner("Accessing global data streams & calculating..."):
+                # We use a chat session to maintain algorithmic context
+                chat = model.start_chat(history=[
+                    {"role": m["role"].replace("assistant", "model"), "parts": [m["content"]]} 
+                    for m in st.session_state.messages[:-1]
+                ])
+                
+                response = chat.send_message(prompt)
                 response_text = response.text
 
-            # Render Citations if Search was used
+            # Render Citations and Results
             st.markdown(response_text)
             
             # Save to Permanent Archive
@@ -112,4 +119,5 @@ if prompt:
             st.components.v1.html(f'<audio autoplay src="{voice_url}"></audio>', height=0)
 
         except Exception as e:
+            # Defensive logging for any further API shifts
             st.error(f"Logic Failure: {e}")
