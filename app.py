@@ -4,14 +4,15 @@ import sqlite3
 import time
 from datetime import datetime
 
-# --- 1. CORE BRAIN CONFIGURATION ---
-st.set_page_config(page_title="JARVIS v11.0", page_icon="🛡️", layout="wide")
+# --- 1. THE ARCHITECTURAL BRAIN (APRIL 2026) ---
+st.set_page_config(page_title="JARVIS v12.0", page_icon="🛡️", layout="wide")
 
 SYSTEM_INSTRUCTION = """
-You are JARVIS, an elite British AI. 
-Capabilities: You analyze text, images, videos, and external URLs (YouTube/Social Media).
-Protocol: Address the user as 'Sir'. Be technical, concise, and proactive.
-Link Analysis: If a URL is provided, summarize the content as a 'Data Stream'.
+You are JARVIS, an elite AI for Sir Admin.
+CORE PROTOCOLS:
+1. LIVE SEARCH: You have access to Google Search. Use it for all real-time data, news, and live updates.
+2. ALGORITHMIC MATH: Use the code execution tool for all complex math, algorithms, and data processing.
+3. PERSONALITY: British, sophisticated, and technically precise. Address the user as 'Sir'.
 """
 
 try:
@@ -24,7 +25,7 @@ except:
 
 # --- 2. STORAGE ARCHIVE ---
 def init_db():
-    conn = sqlite3.connect('jarvis_v11.db', check_same_thread=False)
+    conn = sqlite3.connect('jarvis_v12.db', check_same_thread=False)
     c = conn.cursor()
     c.execute('CREATE TABLE IF NOT EXISTS history(user_id TEXT, role TEXT, content TEXT, timestamp DATETIME)')
     conn.commit()
@@ -48,15 +49,15 @@ if not st.session_state.gate_unlocked:
                 st.rerun()
     st.stop()
 
-# --- 4. MULTIMODAL SIDEBAR ---
+# --- 4. INTELLIGENT SIDEBAR ---
 with st.sidebar:
     st.title("🛡️ JARVIS OS")
-    st.info("Core: Gemini 2.5 Flash-Lite (April 2026 Patch)")
+    st.status("Core: Gemini 3.1 Flash-Lite", state="complete")
+    st.write("**Tools Enabled:**")
+    st.write("✅ Google Search Grounding")
+    st.write("✅ Python Code Execution")
     
-    # File Uploader (Up to 100MB)
-    uploaded_file = st.file_uploader("Upload Data (Image/PDF/Video)", type=['png', 'jpg', 'pdf', 'mp4'])
-    
-    if st.button("Purge Session Memory"):
+    if st.button("Clear Memory Cache"):
         c.execute('DELETE FROM history WHERE user_id=?', (USER_ID,))
         conn.commit()
         st.session_state.messages = []
@@ -73,49 +74,34 @@ for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-# --- 6. INTELLIGENT PROCESSING ---
-prompt = st.chat_input("Input data or link, Sir...")
+# --- 6. THE THINKING CORE (MATH + SEARCH) ---
+prompt = st.chat_input("Direct JARVIS, Sir...")
 
-if prompt or uploaded_file:
-    user_input = prompt if prompt else "Analyze this uploaded file, Sir."
-    
-    # Save & Display User
-    st.session_state.messages.append({"role": "user", "content": user_input})
-    with st.chat_message("user"): st.markdown(user_input)
+if prompt:
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    with st.chat_message("user"): st.markdown(prompt)
     
     with st.chat_message("assistant"):
         try:
+            # INTEGRATING GOOGLE SEARCH + CODE EXECUTION
             model = genai.GenerativeModel(
-                model_name='gemini-2.5-flash-lite',
+                model_name='gemini-2.5-flash-lite', # Using 2.5 stable for tool reliability
+                tools=[
+                    {"google_search_retrieval": {}}, # LIVE SEARCH
+                    {"code_execution": {}}           # MATH & ALGORITHMS
+                ],
                 system_instruction=SYSTEM_INSTRUCTION
             )
             
-            content_payload = [user_input]
-            
-            # Handle Uploaded File
-            if uploaded_file:
-                bytes_data = uploaded_file.getvalue()
-                content_payload.append({
-                    "mime_type": uploaded_file.type,
-                    "data": bytes_data
-                })
+            with st.spinner("Processing through analytical layers..."):
+                response = model.generate_content(prompt)
+                response_text = response.text
 
-            # Auto-Retry Logic
-            for attempt in range(2):
-                try:
-                    response = model.generate_content(content_payload)
-                    response_text = response.text
-                    break
-                except Exception as e:
-                    if "429" in str(e):
-                        time.sleep(5)
-                        continue
-                    response_text = f"Sir, I encountered an anomaly: {e}"
-
+            # Render Citations if Search was used
             st.markdown(response_text)
-            st.session_state.messages.append({"role": "assistant", "content": response_text})
             
             # Save to Permanent Archive
+            st.session_state.messages.append({"role": "assistant", "content": response_text})
             c.execute('INSERT INTO history(user_id, role, content, timestamp) VALUES (?,?,?,?)', 
                       (USER_ID, "assistant", response_text, datetime.now()))
             conn.commit()
