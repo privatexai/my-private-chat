@@ -63,12 +63,11 @@ if check_password():
     st.markdown("<h1>JARVIS PROTOCOL ACTIVE</h1>", unsafe_allow_html=True)
 
     # --- 3. CONFIGURE GEMINI ---
-    # Replace with your actual API Key
-   genai.configure(api_key=st.secrets["GEMINI_KEY"])
+    # Everything here is indented exactly 4 spaces
+    genai.configure(api_key=st.secrets["GEMINI_KEY"])
     
-    # SYSTEM INSTRUCTION: Tells Gemini how to behave
     model = genai.GenerativeModel(
-      model_name='gemini-3.1-flash-preview',
+        model_name='gemini-1.5-flash',
         system_instruction="You are JARVIS, the highly intelligent AI assistant from Iron Man. Be polite, concise, and professional. Address the user as 'Sir'. Use tech terms occasionally."
     )
 
