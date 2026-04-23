@@ -1,41 +1,110 @@
 import streamlit as st
 import google.generativeai as genai
+import time
 
-# 1. Setup Password Protection
+# --- 1. PRO UI SETTINGS (JARVIS STYLE) ---
+st.set_page_config(page_title="JARVIS Terminal", layout="wide")
+
+# Custom CSS for the "Iron Man" look
+st.markdown("""
+    <style>
+    .stApp {
+        background-color: #050a0f;
+        color: #00d4ff;
+        font-family: 'Courier New', Courier, monospace;
+    }
+    [data-testid="stChatMessage"] {
+        border-radius: 15px;
+        padding: 15px;
+        margin-bottom: 10px;
+        border: 1px solid #00d4ff;
+        box-shadow: 0 0 10px #00d4ff33;
+    }
+    /* Chat on Right (User) */
+    [data-testid="stChatMessage"]:nth-child(even) {
+        flex-direction: row-reverse !important;
+        background-color: #0a192f;
+        text-align: right;
+        margin-left: 20%;
+    }
+    /* AI on Left (JARVIS) */
+    [data-testid="stChatMessage"]:nth-child(odd) {
+        background-color: #06121e;
+        margin-right: 20%;
+    }
+    .stTextInput input {
+        background-color: #0a192f;
+        color: #00d4ff;
+        border: 1px solid #00d4ff;
+    }
+    h1 {
+        text-shadow: 0 0 20px #00d4ff;
+        text-align: center;
+        letter-spacing: 5px;
+    }
+    </style>
+    """, unsafe_allow_status=True)
+
+# --- 2. AUTHENTICATION ---
 def check_password():
     if "authenticated" not in st.session_state:
         st.session_state.authenticated = False
     
     if not st.session_state.authenticated:
-        password = st.text_input("Enter Passcode", type="password")
-        if password == "1234": # Set your common passcode here
+        st.title("SYSTEM LOCKED")
+        password = st.text_input("ENTER ACCESS CODE", type="password")
+        if password == "1234":
             st.session_state.authenticated = True
             st.rerun()
         return False
     return True
 
 if check_password():
-    # 2. Configure Gemini
-    genai.configure(api_key="AIzaSyDNIuMYxSegF3pRrZBnQIqmWND4w-uX5vk")
-    model = genai.GenerativeModel('gemini-1.5-flash-latest')
+    st.markdown("<h1>JARVIS PROTOCOL ACTIVE</h1>", unsafe_allow_html=True)
 
-    st.title("My Private AI")
+    # --- 3. CONFIGURE GEMINI ---
+    # Replace with your actual API Key
+    genai.configure(api_key="YOUR_GEMINI_API_KEY_HERE")
     
+    # SYSTEM INSTRUCTION: Tells Gemini how to behave
+    model = genai.GenerativeModel(
+        model_name='gemini-1.5-flash',
+        system_instruction="You are JARVIS, the highly intelligent AI assistant from Iron Man. Be polite, concise, and professional. Address the user as 'Sir'. Use tech terms occasionally."
+    )
+
     if "messages" not in st.session_state:
         st.session_state.messages = []
 
-    # Display chat history
+    # Display Chat History
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
-    # Chat input
-    if prompt := st.chat_input("What is on your mind?"):
+    # Chat Input
+    if prompt := st.chat_input("awaiting orders..."):
+        # Display User message
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.markdown(prompt)
 
+        # Generate JARVIS Response
         with st.chat_message("assistant"):
-            response = model.generate_content(prompt)
-            st.markdown(response.text)
-            st.session_state.messages.append({"role": "assistant", "content": response.text})
+            message_placeholder = st.empty()
+            full_response = ""
+            
+            try:
+                # Add a small "loading" animation
+                with st.spinner("Analyzing data..."):
+                    response = model.generate_content(prompt)
+                
+                # Typing effect
+                for chunk in response.text.split():
+                    full_response += chunk + " "
+                    time.sleep(0.05)
+                    message_placeholder.markdown(full_response + "▌")
+                
+                message_placeholder.markdown(full_response)
+                st.session_state.messages.append({"role": "assistant", "content": full_response})
+                
+            except Exception as e:
+                st.error(f"System Error: {str(e)}")
