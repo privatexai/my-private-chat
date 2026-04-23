@@ -1,193 +1,145 @@
 import streamlit as st
 import google.generativeai as genai
+import sqlite3
+import hashlib
 import time
 from PIL import Image
-import base64
+from datetime import datetime
 
-# --- 1. PRO UI SETTINGS ---
-st.set_page_config(page_title="JARVIS Hub", layout="wide", page_icon="🤖")
+# --- 1. DATABASE ARCHIVE SYSTEM ---
+def init_db():
+    conn = sqlite3.connect('jarvis_vault.db', check_same_thread=False)
+    c = conn.cursor()
+    # Table for User Credentials
+    c.execute('CREATE TABLE IF NOT EXISTS users(username TEXT PRIMARY KEY, password TEXT)')
+    # Table for Chat History
+    c.execute('CREATE TABLE IF NOT EXISTS history(username TEXT, role TEXT, content TEXT, timestamp DATETIME)')
+    conn.commit()
+    return conn, c
+
+conn, c = init_db()
+
+def make_hashes(password):
+    return hashlib.sha256(str.encode(password)).hexdigest()
+
+def check_hashes(password, hashed_text):
+    if make_hashes(password) == hashed_text:
+        return hashed_text
+    return False
+
+# --- 2. UI SETTINGS ---
+st.set_page_config(page_title="JARVIS Persistent Hub", layout="wide", page_icon="🤖")
 
 st.markdown("""
     <style>
     .stApp { background-color: #050a0f; color: #00d4ff; font-family: 'Segoe UI', sans-serif; }
     [data-testid="stSidebar"] { background-color: #06121e; border-right: 1px solid #00d4ff33; }
-    
-    /* Input Bar Alignment */
-    .stChatInputContainer { padding-bottom: 20px; }
-    
-    /* Message Bubbles */
-    [data-testid="stChatMessage"] {
-        border-radius: 15px;
-        border: 1px solid #00d4ff22;
-        background-color: #0a192f66;
-    }
-
-    /* Small Icon Buttons in Menu */
-    .stButton > button {
-        border: 1px solid #00d4ff;
-        background-color: transparent;
-        color: #00d4ff;
-        border-radius: 10px;
-    }
-    
-    .stButton > button:hover {
-        background-color: #00d4ff;
-        color: #050a0f;
-        box-shadow: 0 0 15px #00d4ff;
-    }
-
+    [data-testid="stChatMessage"] { border-radius: 15px; border: 1px solid #00d4ff22; background-color: #0a192f66; }
     h1 { text-shadow: 0 0 15px #00d4ff; font-weight: 200; text-align: center; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. SESSION STATE ---
-if "messages" not in st.session_state: st.session_state.messages = []
-if "temp_storage" not in st.session_state: st.session_state.temp_storage = []
-if "authenticated" not in st.session_state: st.session_state.authenticated = False
-if "show_menu" not in st.session_state: st.session_state.show_menu = False
-if "sensor_mode" not in st.session_state: st.session_state.sensor_mode = None
+# --- 3. PERSISTENT LOGIN SYSTEM ---
+if "logged_in" not in st.session_state: st.session_state.logged_in = False
+if "username" not in st.session_state: st.session_state.username = None
 
-# --- 3. AUTHENTICATION ---
-def check_password():
-    if not st.session_state.authenticated:
-        st.title("SYSTEM LOCKED")
-        password = st.text_input("ENTER ACCESS CODE", type="password")
-        if "ACCESS_CODE" in st.secrets and password == st.secrets["ACCESS_CODE"]:
-            st.session_state.authenticated = True
-            st.rerun()
-        return False
-    return True
+def login_ui():
+    st.markdown("<h1>SYSTEM ACCESS REQUIRED</h1>", unsafe_allow_html=True)
+    menu = ["Login", "Register New User"]
+    choice = st.selectbox("Protocol", menu)
 
-if check_password():
-    # --- SIDEBAR (Archive & Storage) ---
+    if choice == "Login":
+        user = st.text_input("Username")
+        raw_password = st.text_input("Password", type='password')
+        if st.button("Authenticate"):
+            c.execute('SELECT password FROM users WHERE username =?', (user,))
+            data = c.fetchone()
+            if data and check_hashes(raw_password, data[0]):
+                st.session_state.logged_in = True
+                st.session_state.username = user
+                st.success(f"Welcome back, Sir.")
+                st.rerun()
+            else:
+                st.error("Invalid Credentials.")
+
+    elif choice == "Register New User":
+        new_user = st.text_input("Create Username")
+        new_password = st.text_input("Create Password", type='password')
+        if st.button("Register"):
+            try:
+                c.execute('INSERT INTO users(username, password) VALUES (?,?)', (new_user, make_hashes(new_password)))
+                conn.commit()
+                st.success("User Profile Created. You may now login.")
+            except:
+                st.error("Username already exists.")
+
+if not st.session_state.logged_in:
+    login_ui()
+else:
+    # --- 4. LOAD PERSISTENT CHAT HISTORY ---
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
+        # Pull history from DB
+        c.execute('SELECT role, content FROM history WHERE username=? ORDER BY timestamp ASC', (st.session_state.username,))
+        rows = c.fetchall()
+        for row in rows:
+            st.session_state.messages.append({"role": row[0], "content": row[1]})
+
+    # --- SIDEBAR (Archive & Management) ---
     with st.sidebar:
-        st.markdown("### 🕒 CHAT ARCHIVE")
-        if st.button("+ NEW SESSION"):
+        st.markdown(f"### 🛡️ USER: {st.session_state.username.upper()}")
+        if st.button("LOGOUT"):
+            st.session_state.logged_in = False
             st.session_state.messages = []
-            st.session_state.temp_storage = []
             st.rerun()
         
         st.markdown("---")
-        with st.expander("📂 STORAGE VAULT"):
-            if not st.session_state.temp_storage:
-                st.write("Vault empty.")
-            for item in st.session_state.temp_storage:
-                st.caption(f"✔️ {item['name']}")
-            if st.button("Purge Vault"):
-                st.session_state.temp_storage = []
-                st.rerun()
+        if st.button("🗑️ PURGE ALL HISTORY"):
+            c.execute('DELETE FROM history WHERE username=?', (st.session_state.username,))
+            conn.commit()
+            st.session_state.messages = []
+            st.rerun()
 
     st.markdown("<h1>JARVIS INTELLIGENCE HUB</h1>", unsafe_allow_html=True)
 
-    # Display Conversation
+    # Display History
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
-    # --- 4. THE STEALTH INPUT CONSOLE ---
+    # --- 5. THE INPUT CONSOLE ---
     st.markdown("---")
-    
-    # Bottom Bar Layout
     col_menu, col_input = st.columns([0.1, 0.9])
-    
     with col_menu:
-        # The ⋮ (Three Dots) Button
-        if st.button("⋮", help="Open Sensors"):
-            st.session_state.show_menu = not st.session_state.show_menu
+        if st.button("⋮"):
+            st.session_state.show_menu = not st.session_state.get('show_menu', False)
             st.rerun()
 
-    # The Collapsible Sensor Menu
-    active_payload = []
-    if st.session_state.show_menu:
-        # Move icons inside the menu
-        m1, m2, m3, m4, m_space = st.columns([1,1,1,1,6])
-        with m1:
-            if st.button("📎", help="Attach Files"): st.session_state.sensor_mode = "files"; st.rerun()
-        with m2:
-            if st.button("📸", help="Open Camera"): st.session_state.sensor_mode = "camera"; st.rerun()
-        with m3:
-            if st.button("🎤", help="Record Voice"): st.session_state.sensor_mode = "voice"; st.rerun()
-        with m4:
-            # The X (Kill Switch)
-            if st.button("❌", help="Reset All Sensors"):
-                st.session_state.sensor_mode = None
-                st.session_state.show_menu = False
-                st.rerun()
-
-    # --- 5. SENSOR ACTIVATION LOGIC ---
-    if st.session_state.sensor_mode == "files":
-        uploaded_files = st.file_uploader("Upload Data (PDF/Img/Folder)", accept_multiple_files=True)
-        if uploaded_files:
-            for f in uploaded_files:
-                st.session_state.temp_storage.append({"name": f.name})
-                if f.type.startswith("image/"):
-                    active_payload.append(Image.open(f))
-                else:
-                    active_payload.append({"mime_type": f.type, "data": f.getvalue()})
-
-    elif st.session_state.sensor_mode == "camera":
-        cam_input = st.camera_input("Optical Array Active")
-        if cam_input:
-            active_payload.append(Image.open(cam_input))
-            st.session_state.temp_storage.append({"name": "Camera_Scan.png"})
-
-    elif st.session_state.sensor_mode == "voice":
-        audio_input = st.audio_input("Listening for Command...")
-        if audio_input:
-            active_payload.append({"mime_type": "audio/wav", "data": audio_input.getvalue()})
-            st.session_state.temp_storage.append({"name": "Acoustic_Log.wav"})
-
-    # Main Command Box
+    # (Simplified sensor logic for storage - can re-add full menu here)
     prompt = st.chat_input("Direct JARVIS...")
 
-    # --- 6. JARVIS CORE PROCESSING ---
-    if prompt or active_payload:
-        genai.configure(api_key=st.secrets["GEMINI_KEY"])
-        model = genai.GenerativeModel(
-            model_name='gemini-2.5-flash',
-            system_instruction="You are JARVIS. Respond in a sophisticated British tone. Address the user as Sir. Keep it tech-focused."
-        )
+    if prompt:
+        # Save User Message to DB
+        c.execute('INSERT INTO history(username, role, content, timestamp) VALUES (?,?,?,?)', 
+                  (st.session_state.username, "user", prompt, datetime.now()))
+        conn.commit()
+        st.session_state.messages.append({"role": "user", "content": prompt})
 
-        st.session_state.messages.append({"role": "user", "content": prompt if prompt else "Scanning sensory inputs..."})
-        
         with st.chat_message("assistant"):
-            full_resp = ""
-            resp_area = st.empty()
+            genai.configure(api_key=st.secrets["GEMINI_KEY"])
+            model = genai.GenerativeModel('gemini-2.5-flash')
+            response = model.generate_content(prompt)
             
-            try:
-                # Bundle text and binary data
-                input_bundle = [prompt] if prompt else ["Analyze the provided data, Sir."]
-                input_bundle.extend(active_payload)
-                
-                response = model.generate_content(input_bundle)
-                
-                # Typing Effect
-                for chunk in response.text.split():
-                    full_resp += chunk + " "
-                    time.sleep(0.02)
-                    resp_area.markdown(full_resp + "▌")
-                
-                resp_area.markdown(full_resp)
-
-                # --- ACOUSTIC OUTPUT (BRITISH ACCENT) ---
-                clean_text = full_resp.replace('"', '').replace("'", "").strip()[:250]
-                voice_url = f"https://translate.google.com/translate_tts?ie=UTF-8&q={clean_text}&tl=en-gb&client=tw-ob"
-                
-                # Hidden Audio Bridge for Autoplay
-                st.components.v1.html(f"""
-                    <audio autoplay>
-                        <source src="{voice_url}" type="audio/mp3">
-                    </audio>
-                """, height=0)
-                
-                # Add to history
-                st.session_state.messages.append({"role": "assistant", "content": full_resp})
-                
-                # Auto-reset sensors after processing
-                st.session_state.sensor_mode = None
-                st.session_state.show_menu = False
-                time.sleep(1)
-                st.rerun()
-
-            except Exception as e:
-                st.error(f"Hardware Error: {str(e)}")
+            # Save AI Response to DB
+            c.execute('INSERT INTO history(username, role, content, timestamp) VALUES (?,?,?,?)', 
+                      (st.session_state.username, "assistant", response.text, datetime.now()))
+            conn.commit()
+            
+            st.markdown(response.text)
+            st.session_state.messages.append({"role": "assistant", "content": response.text})
+            
+            # Voice Output
+            voice_url = f"https://translate.google.com/translate_tts?ie=UTF-8&q={response.text[:250].replace(' ', '%20')}&tl=en-gb&client=tw-ob"
+            st.components.v1.html(f'<audio autoplay src="{voice_url}"></audio>', height=0)
+            
+            st.rerun()
