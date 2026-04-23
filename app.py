@@ -17,7 +17,7 @@ def check_password():
 if check_password():
     # 2. Configure Gemini
     genai.configure(api_key="AIzaSyDNIuMYxSegF3pRrZBnQIqmWND4w-uX5vk")
-    model = genai.GenerativeModel('gemini-1.5-flash')
+    model = genai.GenerativeModel('gemini-1.5-flash-latest')
 
     st.title("My Private AI")
     
