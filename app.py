@@ -11,18 +11,10 @@ st.markdown("""
     <style>
     .stApp { background-color: #050a0f; color: #00d4ff; font-family: 'Segoe UI', sans-serif; }
     [data-testid="stSidebar"] { background-color: #06121e; border-right: 1px solid #00d4ff33; }
-    
-    /* Input Bar Container */
     .stChatInputContainer { padding-bottom: 20px; }
     
-    /* Glowing X Button */
-    .kill-button button {
-        background-color: #ff4b4b !important;
-        color: white !important;
-        border-radius: 50% !important;
-        border: none !important;
-        box-shadow: 0 0 10px #ff4b4b;
-    }
+    /* Menu Icon Styling */
+    .menu-btn { font-size: 24px; cursor: pointer; border: 1px solid #00d4ff; border-radius: 5px; padding: 5px; text-align: center; }
     
     /* Message bubbles */
     [data-testid="stChatMessage"] {
@@ -38,7 +30,6 @@ st.markdown("""
 if "messages" not in st.session_state: st.session_state.messages = []
 if "temp_storage" not in st.session_state: st.session_state.temp_storage = []
 if "authenticated" not in st.session_state: st.session_state.authenticated = False
-# UI Toggles
 if "show_menu" not in st.session_state: st.session_state.show_menu = False
 if "sensor_mode" not in st.session_state: st.session_state.sensor_mode = None
 
@@ -59,7 +50,6 @@ if check_password():
         st.markdown("### 🕒 CHAT ARCHIVE")
         if st.button("+ NEW SESSION"):
             st.session_state.messages = []; st.session_state.temp_storage = []; st.rerun()
-        
         st.markdown("---")
         with st.expander("📂 STORAGE"):
             for item in st.session_state.temp_storage: st.caption(f"✔️ {item['name']}")
@@ -70,77 +60,83 @@ if check_password():
     for message in st.session_state.messages:
         with st.chat_message(message["role"]): st.markdown(message["content"])
 
-    # --- 4. THE STEALTH INPUT CONSOLE ---
+    # --- 4. STEALTH INPUT CONSOLE ---
     st.markdown("---")
     
-    # Control Row
-    ctrl_col1, ctrl_col2 = st.columns([0.1, 0.9])
+    # Input Row
+    col_menu, col_input = st.columns([0.1, 0.9])
     
-    with ctrl_col1:
-        if st.button("⋮"):
+    with col_menu:
+        if st.button("⋮", help="Toggle Sensors"):
             st.session_state.show_menu = not st.session_state.show_menu
+            st.rerun()
 
-    # The Collapsible Menu
+    # Collapsible Sensor Menu
     if st.session_state.show_menu:
-        menu_cols = st.columns([1, 1, 1, 1, 6])
-        with menu_cols[0]:
-            if st.button("📎"): st.session_state.sensor_mode = "files"
-        with menu_cols[1]:
-            if st.button("📸"): st.session_state.sensor_mode = "camera"
-        with menu_cols[2]:
-            if st.button("🎤"): st.session_state.sensor_mode = "voice"
-        with menu_cols[3]:
-            st.markdown('<div class="kill-button">', unsafe_allow_html=True)
-            if st.button("X"): 
+        m1, m2, m3, m4, m5 = st.columns([1,1,1,1,6])
+        with m1: 
+            if st.button("📎"): st.session_state.sensor_mode = "files"; st.rerun()
+        with m2: 
+            if st.button("📸"): st.session_state.sensor_mode = "camera"; st.rerun()
+        with m3: 
+            if st.button("🎤"): st.session_state.sensor_mode = "voice"; st.rerun()
+        with m4:
+            if st.button("❌", help="Close Sensors"):
                 st.session_state.sensor_mode = None
                 st.session_state.show_menu = False
                 st.rerun()
-            st.markdown('</div>', unsafe_allow_html=True)
 
-    # Active Sensor Display
-    active_files, active_cam, active_voice = None, None, None
-    
+    # Active Sensor Logic
+    active_payload = []
     if st.session_state.sensor_mode == "files":
-        active_files = st.file_uploader("Upload Data", accept_multiple_files=True)
-    elif st.session_state.sensor_mode == "camera":
-        active_cam = st.camera_input("Optical Sensor Active")
-    elif st.session_state.sensor_mode == "voice":
-        active_voice = st.audio_input("Listening...")
-
-    # Main Command Bar
-    prompt = st.chat_input("Direct JARVIS...")
-
-    # --- 5. LOGIC ---
-    if prompt or active_files or active_cam or active_voice:
-        genai.configure(api_key=st.secrets["GEMINI_KEY"])
-        model = genai.GenerativeModel('gemini-2.5-flash')
-        payload = []
-        
-        if prompt: payload.append(prompt)
-        if active_files:
-            for f in active_files:
-                payload.append(Image.open(f) if f.type.startswith("image/") else {"mime_type": f.type, "data": f.getvalue()})
+        files = st.file_uploader("Upload", accept_multiple_files=True)
+        if files:
+            for f in files:
                 st.session_state.temp_storage.append({"name": f.name})
-        if active_cam:
-            payload.append(Image.open(active_cam))
+                active_payload.append(Image.open(f) if f.type.startswith("image/") else {"mime_type": f.type, "data": f.getvalue()})
+    
+    elif st.session_state.sensor_mode == "camera":
+        cam = st.camera_input("Optical Sensor Active")
+        if cam:
+            active_payload.append(Image.open(cam))
             st.session_state.temp_storage.append({"name": "Camera_Capture.png"})
-        if active_voice:
-            payload.append({"mime_type": "audio/wav", "data": active_voice.getvalue()})
+            
+    elif st.session_state.sensor_mode == "voice":
+        voice = st.audio_input("Listening...")
+        if voice:
+            active_payload.append({"mime_type": "audio/wav", "data": voice.getvalue()})
             st.session_state.temp_storage.append({"name": "Voice_Log.wav"})
 
-        # Response
-        st.session_state.messages.append({"role": "user", "content": prompt if prompt else "Input processed."})
+    prompt = st.chat_input("Direct JARVIS...")
+
+    # --- 5. EXECUTION ---
+    if prompt or active_payload:
+        genai.configure(api_key=st.secrets["GEMINI_KEY"])
+        model = genai.GenerativeModel('gemini-2.5-flash')
+        
+        input_list = [prompt] if prompt else ["Analyze sensory data, Sir."]
+        input_list.extend(active_payload)
+
+        st.session_state.messages.append({"role": "user", "content": prompt if prompt else "Sensory scan sent."})
+        
         with st.chat_message("assistant"):
             full_resp = ""
             resp_area = st.empty()
-            response = model.generate_content(payload)
-            for chunk in response.text.split():
-                full_resp += chunk + " "
-                time.sleep(0.03)
-                resp_area.markdown(full_resp + "▌")
-            resp_area.markdown(full_resp)
-            st.text_to_speech(full_resp)
-            st.session_state.messages.append({"role": "assistant", "content": full_resp})
-            # Reset sensors after sending
-            st.session_state.sensor_mode = None
-            st.rerun()
+            try:
+                response = model.generate_content(input_list)
+                for chunk in response.text.split():
+                    full_resp += chunk + " "
+                    time.sleep(0.02)
+                    resp_area.markdown(full_resp + "▌")
+                
+                resp_area.markdown(full_resp)
+                
+                # Audio Fix: We use a more stable HTML/Markdown approach for audio if native fails
+                # This line allows audio response without calling the broken attribute
+                st.audio(f"https://translate.google.com/translate_tts?ie=UTF-8&q={full_resp[:200]}&tl=en&client=tw-ob")
+                
+                st.session_state.messages.append({"role": "assistant", "content": full_resp})
+                st.session_state.sensor_mode = None
+                st.rerun()
+            except Exception as e:
+                st.error(f"Hardware Error: {str(e)}")
