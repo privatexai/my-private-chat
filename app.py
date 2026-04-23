@@ -17,7 +17,7 @@ except Exception as e:
 
 # --- 2. DATABASE ENGINE (VERSION 2 - ERROR PROOF) ---
 def init_db():
-    # Renaming to v2.db forces the server to create a fresh, correct table
+    # v2 forces a fresh table structure to prevent 'OperationalError'
     conn = sqlite3.connect('jarvis_v2.db', check_same_thread=False)
     c = conn.cursor()
     c.execute('''CREATE TABLE IF NOT EXISTS history 
@@ -49,7 +49,8 @@ if not st.session_state.gate_unlocked:
 st.title("JARVIS: ANALYTICAL CORE")
 
 with st.sidebar:
-    st.markdown("### 🛡️ SYSTEM STATUS: SECURE")
+    st.markdown(f"### 🛡️ STATUS: ONLINE")
+    st.info("Model: Gemini 2.5 Flash")
     if st.button("Emergency Lock"):
         st.session_state.gate_unlocked = False
         st.rerun()
@@ -69,7 +70,7 @@ for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-# --- 5. AI PROCESSING CORE ---
+# --- 5. AI PROCESSING CORE (GEMINI 2.5 FLASH) ---
 prompt = st.chat_input("Input data for analysis, Sir...")
 
 if prompt:
